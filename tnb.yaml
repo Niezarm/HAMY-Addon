@@ -30,7 +30,7 @@ utility_meter:
     tariffs:
       - normal
 
-#Reading convertion and calibration
+#Reading conversion and calibration
 sensor:
   - platform: template
     sensors:
