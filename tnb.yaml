@@ -30,7 +30,7 @@ utility_meter:
     tariffs:
       - normal
 
-#Reading conversion and calibration
+#Reading convertion and calibration
 sensor:
   - platform: template
     sensors:
@@ -54,7 +54,6 @@ sensor:
         value_template: >
           {{ (states('sensor.monthly_energy_new_normal') | float / 1000 * 0.9872) | round(3) }}
         icon_template: mdi:counter
-
 
 template:
   - sensor:
@@ -145,6 +144,35 @@ template:
          {% set usage = states('sensor.tnb_general_kw') | float %}
          {% set retail = 0.0 if usage <= 600 else 10.0 %}
          {{ "%.2f" | format(retail) }}
+
+#KWTBB Charge
+      - name: "General KWTBB"
+        unique_id: general_kwtbb
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set total = states('sensor.monthly_total_energy_general_bill_with_eei') | float %}
+          {% set kwtbb = states('sensor.above_300_charge') | float %}
+          {{ (total * kwtbb) | round(2) }}
+          
+      - name: "ToU KWTBB"
+        unique_id: tou_kwtbb
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set total = states('sensor.monthly_total_energy_tou_bill_with_eei') | float %}
+          {% set kwtbb = states('sensor.above_300_charge') | float %}
+          {{ (total * kwtbb) | round(2) }}
+
+#Above 300kwh          
+      - name: "Above 300 Charge"
+        unique_id: above_300_charge
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+         {% set usage = states('sensor.tnb_general_kw') | float %}
+         {% set charge = 0.016 if usage > 300 else 0.00 %}
+         {{ "%.2f" | format(charge) }}
          
 #Above 1500kwh          
       - name: "Above 1500 Charge"
@@ -199,6 +227,25 @@ template:
           {% set base = states('sensor.tou_total_energy_cost') | float %}
           {% set rebate = states('sensor.monthly_energy_eei_rebate') | float %}
           {{ (base - rebate) | round(2) }}
+
+#Grand Total
+      - name: "Grand Total General Bill with tax"
+        unique_id: grand_total_general_bill_with_tax
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+         {% set base = states('sensor.monthly_total_energy_general_bill_with_eei') | float %}
+         {% set kwtbb = states('sensor.general_kwtbb') | float %}
+         {{ (base + kwtbb) | round(2) }}
+          
+      - name: "Grand Total ToU Bill with tax"
+        unique_id: grand_total_tou_bill_with_tax
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+         {% set base = states('sensor.monthly_total_energy_tou_bill_with_eei') | float %}
+         {% set kwtbb = states('sensor.tou_kwtbb') | float %}
+         {{ (base + kwtbb) | round(2) }}
           
 automation:
   - id: tnb_peak_active
