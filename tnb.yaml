@@ -6,15 +6,15 @@ homeassistant:
 input_number:
   afa_fixed_charge:
     name: AFA Fixed Charge
-    initial: 0.00
-    min: 0
-    max: 50
-    step: 0.01
     unit_of_measurement: "RM"
+    min: 0
+    max: 100
+    step: 0.01
+    mode: box
 
 utility_meter:
   monthly_energy_tou:
-    source: sensor.energy_consumed # Change own sensors
+    source: sensor.energy_consumed  # Replace with actual sensor
     cycle: monthly
     offset:
       days: 8
@@ -23,230 +23,37 @@ utility_meter:
       - offpeak
 
   monthly_energy_new:
-    source: sensor.energy_consumed # Change own sensors
+    source: sensor.energy_consumed  # Replace with actual sensor
     cycle: monthly
     offset:
       days: 8
     tariffs:
       - normal
 
-#Reading convertion and calibration
 sensor:
   - platform: template
     sensors:
-      tnb_peak_kw:
+      tnb_peak_kwh:
         friendly_name: "TNB Peak kWh"
         unit_of_measurement: "kWh"
         value_template: >
           {{ (states('sensor.monthly_energy_tou_peak') | float / 1000 * 0.9872) | round(3) }}
         icon_template: mdi:counter
 
-      tnb_offpeak_kw:
+      tnb_offpeak_kwh:
         friendly_name: "TNB Offpeak kWh"
         unit_of_measurement: "kWh"
         value_template: >
           {{ (states('sensor.monthly_energy_tou_offpeak') | float / 1000 * 0.9872) | round(3) }}
         icon_template: mdi:counter
 
-      tnb_general_kw:
+      tnb_general_kwh:
         friendly_name: "TNB General kWh"
         unit_of_measurement: "kWh"
         value_template: >
           {{ (states('sensor.monthly_energy_new_normal') | float / 1000 * 0.9872) | round(3) }}
         icon_template: mdi:counter
 
-template:
-  - sensor:
-#ToU
-      - name: "TOU Peak Energy Cost"
-        unique_id: tou_peak_energy_cost
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set kwh = states('sensor.tnb_peak_kw') | float %}
-          {% set tariff = states('sensor.peak_charge') | float %}
-          {{ (kwh * tariff) | round(2) }}
-
-      - name: "TOU Offpeak Energy Cost"
-        unique_id: tou_offpeak_energy_cost
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set kwh = states('sensor.tnb_offpeak_kw') | float %}
-          {% set tariff = states('sensor.offpeak_charge') | float %}
-          {{ (kwh * tariff) | round(2) }}
-
-      - name: "TOU Total Energy Cost"
-        unique_id: tou_total_energy_cost
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set peak = states('sensor.tou_peak_energy_cost') | float %}
-          {% set offpeak = states('sensor.tou_offpeak_energy_cost') | float %}
-          {% set afa = states('input_number.afa_fixed_charge') | float %}
-          {% set retail = states('sensor.monthly_energy_retail_charge') | float %}
-          {{ (peak + offpeak + afa + retail) | round(2) }}
-          
-#General          
-      - name: "General Energy New Cost"
-        unique_id: general_energy_new_cost
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set kwh = states('sensor.tnb_general_kw') | float %}
-          {% set tariff = states('sensor.general_charge') | float %}
-          {{ (kwh * tariff) | round(2) }}
-
-      - name: "General Total Energy Cost"
-        unique_id: general_total_energy_cost
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set general = states('sensor.general_energy_new_cost') | float %}
-          {% set afa = states('input_number.afa_fixed_charge') | float %}
-          {% set retail = states('sensor.monthly_energy_retail_charge') | float %}
-          {{ (general + afa + retail) | round(2) }}
-
-#EEI Rebate Scheme
-      - name: "Monthly Energy EEI Rebate"
-        unique_id: monthly_energy_eei_rebate
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set usage = states('sensor.tnb_general_kw') | float %}
-          {% set rebate_rate = (
-            25.0 if usage <= 200 else
-            24.5 if usage <= 250 else
-            22.5 if usage <= 300 else
-            21.0 if usage <= 350 else
-            17.0 if usage <= 400 else
-            14.5 if usage <= 450 else
-            12.0 if usage <= 500 else
-            10.5 if usage <= 550 else
-            9.0 if usage <= 600 else
-            7.5 if usage <= 650 else
-            5.5 if usage <= 700 else
-            4.5 if usage <= 750 else
-            4.0 if usage <= 800 else
-            2.5 if usage <= 850 else
-            1.0 if usage <= 900 else
-            0.5 if usage <= 1000 else
-            0.0
-          ) %}
-          {{ ((usage * rebate_rate) / 100) | round(2) }}
-          
-#Retail          
-      - name: "Monthly Energy Retail Charge"
-        unique_id: monthly_energy_retail
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-         {% set usage = states('sensor.tnb_general_kw') | float %}
-         {% set retail = 0.0 if usage <= 600 else 10.0 %}
-         {{ "%.2f" | format(retail) }}
-
-#KWTBB Charge
-      - name: "General KWTBB"
-        unique_id: general_kwtbb
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set total = states('sensor.monthly_total_energy_general_bill_with_eei') | float %}
-          {% set kwtbb = states('sensor.above_300_charge') | float %}
-          {{ (total * kwtbb) | round(2) }}
-          
-      - name: "ToU KWTBB"
-        unique_id: tou_kwtbb
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set total = states('sensor.monthly_total_energy_tou_bill_with_eei') | float %}
-          {% set kwtbb = states('sensor.above_300_charge') | float %}
-          {{ (total * kwtbb) | round(2) }}
-
-#Above 300kwh          
-      - name: "Above 300 Charge"
-        unique_id: above_300_charge
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-         {% set usage = states('sensor.tnb_general_kw') | float %}
-         {% set charge = 0.016 if usage > 300 else 0.00 %}
-         {{ "%.2f" | format(charge) }}
-         
-#Above 1500kwh          
-      - name: "Above 1500 Charge"
-        unique_id: above_1500_charge
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-         {% set usage = states('sensor.tnb_general_kw') | float %}
-         {% set charge = 0.10 if usage > 1500 else 0.00 %}
-         {{ "%.2f" | format(charge) }}
-
-#Tariff
-      - name: "Peak Charge"
-        unique_id: peak_charge
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set extra = states('sensor.above_1500_charge') | float %}
-          {{ (extra + 0.4592) | round(4) }}
-
-      - name: "Offpeak Charge"
-        unique_id: offpeak_charge
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set extra = states('sensor.above_1500_charge') | float %}
-          {{ (extra + 0.4183) | round(4) }}
-
-      - name: "General Charge"
-        unique_id: general_charge
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set extra = states('sensor.above_1500_charge') | float %}
-          {{ (extra + 0.4443) | round(4) }}
-         
-#Total sum with rebate
-      - name: "Monthly Total Energy General Bill with EEI"
-        unique_id: monthly_total_energy_general_bill_with_eei
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-         {% set base = states('sensor.general_total_energy_cost') | float %}
-         {% set rebate = states('sensor.monthly_energy_eei_rebate') | float %}
-         {{ (base - rebate) | round(2) }}
-          
-      - name: "Monthly Total Energy ToU Bill with EEI"
-        unique_id: monthly_total_energy_tou_bill_with_eei
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-          {% set base = states('sensor.tou_total_energy_cost') | float %}
-          {% set rebate = states('sensor.monthly_energy_eei_rebate') | float %}
-          {{ (base - rebate) | round(2) }}
-
-#Grand Total
-      - name: "Grand Total General Bill with tax"
-        unique_id: grand_total_general_bill_with_tax
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-         {% set base = states('sensor.monthly_total_energy_general_bill_with_eei') | float %}
-         {% set kwtbb = states('sensor.general_kwtbb') | float %}
-         {{ (base + kwtbb) | round(2) }}
-          
-      - name: "Grand Total ToU Bill with tax"
-        unique_id: grand_total_tou_bill_with_tax
-        unit_of_measurement: "RM"
-        device_class: monetary
-        state: >
-         {% set base = states('sensor.monthly_total_energy_tou_bill_with_eei') | float %}
-         {% set kwtbb = states('sensor.tou_kwtbb') | float %}
-         {{ (base + kwtbb) | round(2) }}
-          
 automation:
   - id: tnb_peak_active
     alias: TNB Peak Active
@@ -279,3 +86,250 @@ automation:
         data:
           option: offpeak
     mode: single
+
+template:
+  - sensor:
+      # EEI Rebate Scheme
+      - name: "EEI Rebate Rate"
+        unique_id: eei_rebate_rate
+        unit_of_measurement: "RM/kWh"
+        state: >
+          {% set usage = states('sensor.tnb_general_kwh') | float %}
+          {% if usage <= 200 %} 0.25
+          {% elif usage <= 250 %} 0.245
+          {% elif usage <= 300 %} 0.225
+          {% elif usage <= 350 %} 0.21
+          {% elif usage <= 400 %} 0.17
+          {% elif usage <= 450 %} 0.145
+          {% elif usage <= 500 %} 0.12
+          {% elif usage <= 550 %} 0.105
+          {% elif usage <= 600 %} 0.09
+          {% elif usage <= 650 %} 0.075
+          {% elif usage <= 700 %} 0.055
+          {% elif usage <= 750 %} 0.045
+          {% elif usage <= 800 %} 0.04
+          {% elif usage <= 850 %} 0.025
+          {% elif usage <= 900 %} 0.01
+          {% elif usage <= 1000 %} 0.005
+          {% else %} 0.00
+          {% endif %}
+
+      # Retail
+      - name: "Monthly Energy Retail Charge"
+        unique_id: monthly_energy_retail_charge
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set usage = states('sensor.tnb_general_kwh') | float %}
+          {% set retail = 0.0 if usage <= 600 else 10.0 %}
+          {{ "%.2f" | format(retail) }}
+
+      # AFA
+      - name: "Energy AFA Charge" 
+        unique_id: energy_afa_charge
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set usage = states('sensor.tnb_general_kwh') | float %}
+          {% set afa = 0.0 if usage <= 600 else states('input_number.afa_fixed_charge') | float %}
+          {{ "%.2f" | format(afa) }}
+
+      # Above 1500kWh
+      - name: "Above 1500 Charge"
+        unique_id: above_1500_charge
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set usage = states('sensor.tnb_general_kwh') | float %}
+          {% set charge = 0.10 if usage > 1500 else 0.00 %}
+          {{ "%.2f" | format(charge) }}
+
+      # KWTBB above 300kWh
+      - name: "KWTBB"
+        unique_id: kwtbb
+        state_class: measurement
+        state: >
+          {% set usage = states('sensor.tnb_general_kwh') | float %}
+          {% set charge = 0.016 if usage > 300 else 0.00 %}
+          {{ charge }}
+
+      # Tariffs
+      - name: "General Charge"
+        unique_id: general_charge
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set extra = states('sensor.above_1500_charge') | float %}
+          {% set energy = 0.2703 %}
+          {% set capacity = 0.0455 %}
+          {% set network = 0.1285 %}
+          {{ (extra + energy + capacity + network) | round(4) }}
+
+      - name: "Peak Charge"
+        unique_id: peak_charge
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set extra = states('sensor.above_1500_charge') | float %}
+          {% set energy = 0.2852 %}
+          {% set capacity = 0.0455 %}
+          {% set network = 0.1285 %}
+          {{ (extra + energy + capacity + network) | round(2) }}
+
+      - name: "Offpeak Charge"
+        unique_id: offpeak_charge
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set extra = states('sensor.above_1500_charge') | float %}
+          {% set energy = 0.2443 %}
+          {% set capacity = 0.0455 %}
+          {% set network = 0.1285 %}
+          {{ (extra + energy + capacity + network) | round(2) }}
+
+      # Energy Cost
+      - name: "General Energy New Cost"
+        unique_id: general_energy_new_cost
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set kwh = states('sensor.tnb_general_kwh') | float %}
+          {% set tariff = states('sensor.general_charge') | float %}
+          {{ (kwh * tariff) | round(2) }}
+
+      - name: "General Total Energy Cost"
+        unique_id: general_total_energy_cost
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set general = states('sensor.general_energy_new_cost') | float %}
+          {% set afa = states('sensor.energy_afa_charge') | float %}
+          {% set retail = states('sensor.monthly_energy_retail_charge') | float %}
+          {{ (general + afa + retail) | round(2) }}
+
+      - name: "General Rebate"
+        unique_id: general_rebate
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set kwh = states('sensor.tnb_general_kwh') | float %}
+          {% set rebate = states('sensor.eei_rebate_rate') | float %}
+          {{ (kwh * rebate) | round(2) }}
+
+      - name: "Monthly Total Energy General Bill with EEI"
+        unique_id: monthly_total_energy_general_bill_with_eei
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set base = states('sensor.general_total_energy_cost') | float %}
+          {% set rebate = states('sensor.general_rebate') | float %}
+          {{ (base - rebate) | round(2) }}
+
+      - name: "General KWTBB"
+        unique_id: general_kwtbb
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set total = states('sensor.monthly_total_energy_general_bill_with_eei') | float %}
+          {% set kwtbb = states('sensor.kwtbb') | float %}
+          {{ (total * kwtbb) | round(2) }}
+
+      - name: "Grand Total General Bill without ST"
+        unique_id: grand_total_general_bill_without_st
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set base = states('sensor.monthly_total_energy_general_bill_with_eei') | float %}
+          {% set kwtbb = states('sensor.general_kwtbb') | float %}
+          {{ (base + kwtbb) | round(2) }}
+
+######################TOU#######################
+      # Energy Cost
+      - name: "Peak Energy Cost"
+        unique_id: peak_energy_cost
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set kwh = states('sensor.tnb_peak_kwh') | float %}
+          {% set tariff = states('sensor.peak_charge') | float %}
+          {{ (kwh * tariff) | round(2) }}
+
+      - name: "OffPeak Energy Cost"
+        unique_id: offpeak_energy_cost
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set kwh = states('sensor.tnb_offpeak_kwh') | float %}
+          {% set tariff = states('sensor.offpeak_charge') | float %}
+          {{ (kwh * tariff) | round(2) }}
+
+      - name: "TOU Total Energy Cost"
+        unique_id: tou_total_energy_cost
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set peak = states('sensor.peak_energy_cost') | float %}
+          {% set offpeak = states('sensor.offpeak_energy_cost') | float %}
+          {% set afa = states('sensor.energy_afa_charge') | float %}
+          {% set retail = states('sensor.monthly_energy_retail_charge') | float %}
+          {{ (peak + offpeak + afa + retail) | round(2) }}
+
+      - name: "ToU Rebate"
+        unique_id: tou_rebate
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set peak = states('sensor.tnb_peak_kwh') | float %}
+          {% set offpeak = states('sensor.tnb_offpeak_kwh') | float %}
+          {% set total = peak + offpeak | float %}
+          {% set rebate = states('sensor.eei_rebate_rate') | float %}
+          {{ (total * rebate) | round(2) }}
+
+      - name: "Monthly Total Energy ToU Bill with EEI"
+        unique_id: monthly_total_energy_tou_bill_with_eei
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set base = states('sensor.tou_total_energy_cost') | float %}
+          {% set rebate = states('sensor.tou_rebate') | float %}
+          {{ (base - rebate) | round(2) }}
+
+      - name: "ToU KWTBB"
+        unique_id: tou_kwtbb
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set total = states('sensor.monthly_total_energy_tou_bill_with_eei') | float %}
+          {% set kwtbb = states('sensor.kwtbb') | float %}
+          {{ (total * kwtbb) | round(2) }}
+
+      - name: "Grand Total ToU Bill without ST"
+        unique_id: grand_total_tou_bill_without_st
+        unit_of_measurement: "RM"
+        device_class: monetary
+        state: >
+          {% set base = states('sensor.monthly_total_energy_tou_bill_with_eei') | float %}
+          {% set kwtbb = states('sensor.tou_kwtbb') | float %}
+          {{ (base + kwtbb) | round(2) }}
+          
+  - sensor:
+      - name: "Peak percentage"
+        unique_id: peak_percentage
+        unit_of_measurement: "%"
+        state: >
+          {% set peak = states('sensor.tnb_peak_kwh') | float %}
+          {% set offpeak = states('sensor.tnb_offpeak_kwh') | float %}
+          {% set total = peak + offpeak %}
+          {{ (peak / total * 100) | round(2) if total > 0 else 0 }}
+
+      - name: "Offpeak percentage"
+        unique_id: offpeak_percentage
+        unit_of_measurement: "%"
+        state: >
+          {% set peak = states('sensor.tnb_peak_kwh') | float %}
+          {% set offpeak = states('sensor.tnb_offpeak_kwh') | float %}
+          {% set total = peak + offpeak %}
+          {{ (offpeak / total * 100) | round(2) if total > 0 else 0 }}
+          
+          
+          
